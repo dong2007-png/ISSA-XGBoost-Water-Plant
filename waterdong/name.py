@@ -12,7 +12,7 @@ import os
 import re
 
 DATA_FOLDER = "./data"          # 数据文件夹
-OUTPUT_FILE = "列名详细分析.txt"  # 输出文件名
+OUTPUT_FILE = "../列名详细分析.txt"  # 输出文件名
 
 def parse_excel_date(val):
     """尝试判断值是否为日期格式"""

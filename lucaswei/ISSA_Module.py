@@ -2,12 +2,12 @@ import numpy as np
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error
 from scipy.stats import qmc  # 用于 Sobol 序列
-import matplotlib.pyplot as plt
 
 class ISSA_XGBoost_Optimizer:
-    def __init__(self, train_x, train_y, test_x, test_y, pop_size=32, max_iter=200, patience=50):
+    # 这里的 test_x, test_y 实际上在外部调用时会传入验证集 (Validation Set)
+    def __init__(self, train_x, train_y, val_x, val_y, pop_size=32, max_iter=200, patience=50):
         self.train_x, self.train_y = train_x, train_y
-        self.test_x, self.test_y = test_x, test_y
+        self.val_x, self.val_y = val_x, val_y
 
         self.pop_size = pop_size
         self.max_iter = max_iter
@@ -15,10 +15,10 @@ class ISSA_XGBoost_Optimizer:
         self.no_improve_count = 0
 
         # --- 核心修改：搜索维度升级为 4 ---
-        self.dim = 4
-        # 搜索边界：[n_estimators, learning_rate, max_depth, gamma]
-        self.lb = np.array([10, 0.001, 3, 0.01])
-        self.ub = np.array([1000, 0.5, 15, 0.5])  # 将树的上限拉到 1000
+        self.dim = 6
+        # 搜索边界：[n_estimators, learning_rate, max_depth, gamma, min_child_weight, reg_lambda]
+        self.lb = np.array([10, 0.001, 2, 0.01, 1, 0.1])  # 注意 max_depth 下界放宽到 2
+        self.ub = np.array([1000, 0.3, 10, 0.5, 10, 5.0])
 
         # 策略参数
         self.P_percent = 0.45
@@ -44,14 +44,17 @@ class ISSA_XGBoost_Optimizer:
             learning_rate=params[1],
             max_depth=int(params[2]),
             gamma=params[3],
+            min_child_weight=int(params[4]),  # 新增武器 1
+            reg_lambda=params[5],  # 新增武器 2
             subsample=0.8,
             colsample_bytree=0.8,
-            random_state=42,           # 固定随机种子，保证 ISSA 评估的公平性
+            random_state=42,
             verbosity=0
         )
         model.fit(self.train_x, self.train_y)
-        preds = model.predict(self.test_x)
-        return np.sqrt(mean_squared_error(self.test_y, preds))
+        # 用传入的验证集来计算 RMSE 指导进化
+        preds = model.predict(self.val_x)
+        return np.sqrt(mean_squared_error(self.val_y, preds))
 
     def optimize(self):
         # 初始化适应度
